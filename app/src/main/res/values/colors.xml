@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors -->
+    <color name="primary_color">#1A237E</color>
+    <color name="primary_dark">#000051</color>
+    <color name="primary_light">#534bae</color>
+    
+    <!-- Accent Colors -->
+    <color name="accent_color">#00BCD4</color>
+    <color name="accent_dark">#008ba3</color>
+    <color name="accent_light">#62efff</color>
+    
+    <!-- Background Colors -->
+    <color name="background_dark">#121212</color>
+    <color name="background_light">#FFFFFF</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="surface_light">#F5F5F5</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#E0E0E0</color>
+    <color name="text_secondary">#9E9E9E</color>
+    <color name="text_disabled">#616161</color>
+    
+    <!-- Status Colors -->
+    <color name="green">#4CAF50</color>
+    <color name="red">#F44336</color>
+    <color name="yellow">#FFC107</color>
+    <color name="blue">#2196F3</color>
+    <color name="orange">#FF9800</color>
+    
+    <!-- UI Colors -->
+    <color name="gray_light">#424242</color>
+    <color name="gray_dark">#212121</color>
+    <color name="divider_color">#333333</color>
+    
+    <!-- Button Colors -->
+    <color name="button_primary">#1A237E</color>
+    <color name="button_accent">#00BCD4</color>
+    <color name="button_secondary">#424242</color>
+    <color name="button_info">#2196F3</color>
+    <color name="button_success">#4CAF50</color>
+    <color name="button_danger">#F44336</color>
+</resources>
