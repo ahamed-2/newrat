@@ -2,43 +2,189 @@ name: Build My Eye APK
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch: # ম্যানুয়ালি বিল্ড রান করার অপশন
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Manual trigger option
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+        - debug
+        - release
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-    - name: Checkout Source Code
+    - name: Checkout code
       uses: actions/checkout@v4
-
+      with:
+        fetch-depth: 0
+        
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    # Manifest এর প্যাকেজ নেম অনুযায়ী build.gradle আপডেট করা
-    - name: Configure Package Name
-      run: |
-        # প্যাকেজ নেম com.ahamedrahim.myeye নিশ্চিত করা
-        sed -i 's/applicationId ".*"/applicationId "com.ahamedrahim.myeye"/' app/build.gradle
         
-        # Manifest এর সাথে মিলিয়ে ভার্সন সেট করা (Optional)
-        sed -i 's/versionCode [0-9]*/versionCode 1/' app/build.gradle
-        sed -i 's/versionName "[^"]*"/versionName "1.0.0"/' app/build.gradle
-
-    - name: Build with Gradle
-      # সরাসরি gradle এর বদলে wrapper ব্যবহার করা ভালো
-      run: ./gradlew assembleDebug --stacktrace
-
-    - name: Upload APK
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+        build-tools-version: 34.0.0
+        ndk-version: 25.1.8937393
+        cmake-version: 3.22.1
+        
+    - name: Cache Gradle dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+          ~/.android/build-cache
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+          
+    - name: Grant execute permission for gradlew
+      run: |
+        chmod +x gradlew
+        chmod +x ./gradlew
+        
+    - name: Validate Gradle Wrapper
+      run: |
+        ./gradlew -v
+        
+    - name: Build Debug APK
+      if: github.event.inputs.build_type == 'debug' || github.event_name == 'pull_request'
+      run: |
+        echo "Building Debug APK..."
+        ./gradlew assembleDebug --stacktrace --no-daemon
+        echo "Debug APK build completed!"
+        
+    - name: Build Release APK
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (github.event.inputs.build_type == 'release' || github.event_name == 'push')
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        echo "Building Release APK..."
+        
+        # Create keystore.properties file
+        cat > keystore.properties << EOF
+        storeFile=keystore.jks
+        storePassword=${KEYSTORE_PASSWORD}
+        keyAlias=${KEY_ALIAS}
+        keyPassword=${KEY_PASSWORD}
+        EOF
+        
+        # Decode and save keystore
+        if [ -n "${KEYSTORE_BASE64}" ]; then
+          echo "${KEYSTORE_BASE64}" | base64 --decode > keystore.jks
+          echo "Keystore created successfully"
+        else
+          echo "No keystore found, creating debug keystore..."
+          keytool -genkey -v -keystore keystore.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias androiddebugkey \
+            -storepass android \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+        fi
+        
+        ./gradlew assembleRelease --stacktrace --no-daemon
+        echo "Release APK build completed!"
+        
+    - name: Upload Debug APK Artifact
+      if: github.event.inputs.build_type == 'debug' || github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
-        name: MyEye-Debug-APK
-        # আপনার প্রোজেক্ট স্ট্রাকচার অনুযায়ী সঠিক পাথ
-        path: app/build/outputs/apk/debug/*.apk
+        name: my-eye-app-debug
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/mapping/debug/mapping.txt
+        retention-days: 7
+        
+    - name: Upload Release APK Artifact
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (github.event.inputs.build_type == 'release' || github.event_name == 'push')
+      uses: actions/upload-artifact@v4
+      with:
+        name: my-eye-app-release
+        path: |
+          app/build/outputs/apk/release/*.apk
+          app/build/outputs/mapping/release/mapping.txt
+          app/build/outputs/bundle/release/*.aab
+        retention-days: 30
+        
+    - name: Generate APK Info
+      run: |
+        echo "=== APK Information ==="
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "Debug APK Size: $(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+          echo "Debug APK Created: $(date -r app/build/outputs/apk/debug/app-debug.apk)"
+        fi
+        
+        if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+          echo "Release APK Size: $(du -h app/build/outputs/apk/release/app-release.apk | cut -f1)"
+          echo "Release APK Created: $(date -r app/build/outputs/apk/release/app-release.apk)"
+        fi
+        
+    - name: Create GitHub Release
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "My Eye App v1.0.0"
+        tag_name: "v1.0.0-${{ github.run_number }}"
+        body: |
+          # My Eye App - Android Monitoring Application
+          
+          ## 📱 App Information
+          - **Version:** 1.0.0
+          - **Build:** #${{ github.run_number }}
+          - **Build Date:** ${{ github.event.head_commit.timestamp }}
+          
+          ## 📦 Download Links
+          - **Debug APK:** For testing purposes
+          - **Release APK:** For production use
+          - **Android App Bundle (AAB):** For Play Store submission
+          
+          ## 🔧 Features
+          - SMS Monitoring & Forwarding
+          - Media File Scanning
+          - Telegram Bot Integration
+          - Background Services
+          - Educational Purpose Only
+          
+          ## ⚠️ Important Notice
+          This app is for **EDUCATIONAL PURPOSES ONLY**.
+          Always obtain proper consent before use.
+          
+          Developed by: **Ahamed Rahim**
+          Website: https://ahamed-rahim.pages.dev/
+          
+        files: |
+          app/build/outputs/apk/release/*.apk
+          app/build/outputs/bundle/release/*.aab
+        prerelease: false
+        draft: false
+        
+    - name: Upload Release Notes
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-documents
+        path: |
+          README.md
+          CHANGELOG.md
+          LICENSE
+        retention-days: 90
