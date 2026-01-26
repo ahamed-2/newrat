@@ -1,40 +1,53 @@
-name: Build MyEyeApp APK
+name: Build My Eye APK
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      # ১. জাভা সেটআপ (নেটিভ অ্যাপের জন্য Node.js লাগে না)
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      # ২. গ্র্যাডল পারমিশন দেওয়া
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
-    # APK সাইজ কমানো এবং কোড প্রোটেকশন (Optional)
-    - name: Enable ProGuard/R8
-      run: |
-        sed -i 's/minifyEnabled false/minifyEnabled true/' app/build.gradle || true
-        sed -i 's/shrinkResources false/shrinkResources true/' app/build.gradle || true
+      # ৩. প্যাকেজ নেম এবং ভার্সন কনফিগারেশন
+      - name: Configure Package & Version
+        run: |
+          # প্যাকেজ নেম সেট করা: com.ahamedrahim.myeye
+          sed -i 's/applicationId ".*"/applicationId "com.ahamedrahim.myeye"/' app/build.gradle
+          
+          # ভার্সন কোড এবং নেম আপডেট
+          sed -i 's/versionCode [0-9]*/versionCode 1/' app/build.gradle
+          sed -i 's/versionName "[^"]*"/versionName "1.0.0"/' app/build.gradle
 
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug --stacktrace
+      # ৪. কোড সিকিউরিটি (Obfuscation/ProGuard) - জাভাস্ক্রিপ্টের মতই কোড লুকিয়ে রাখে
+      - name: Enable Obfuscation (Security)
+        run: |
+          # minifyEnabled true করে দেওয়া যাতে কোড রিভার্স ইঞ্জিনিয়ারিং করা কঠিন হয়
+          sed -i 's/minifyEnabled false/minifyEnabled true/' app/build.gradle
+          # shrinkResources true করে দেওয়া যাতে অ্যাপের সাইজ ছোট হয়
+          sed -i 's/shrinkResources false/shrinkResources true/' app/build.gradle
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: MyEyeApp-Debug-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+      # ৫. অ্যাপ বিল্ড করা
+      - name: Build APK (Debug)
+        run: ./gradlew assembleDebug --stacktrace
+
+      # ৬. APK আপলোড করা (ডাউনলোডের জন্য)
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyEye-v1.0.0-Build
+          path: app/build/outputs/apk/debug/app-debug.apk
