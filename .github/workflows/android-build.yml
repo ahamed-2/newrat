@@ -1,0 +1,47 @@
+name:Myeye
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Gradle installed (for generating wrapper if missing)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # ✅ Wrapper না থাকলে Gradle 8.2 দিয়ে wrapper বানাবে (AGP 8.2.2 friendly)
+      - name: Generate Gradle Wrapper (Gradle 8.2) if missing
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 8.2
+          fi
+
+      - name: Give gradlew permission
+        run: chmod +x ./gradlew
+
+      # ✅ Android task app module এ থাকে
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyEyeSafeTelegramDemo-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
